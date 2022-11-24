@@ -306,6 +306,22 @@ func (k Keeper) HandleSlashPacket(ctx sdk.Context, chainID string, data ccv.Slas
 	return true, nil
 }
 
+func (k Keeper) GetChainIdsToRemove(ctx sdk.Context, referenceTime uint64) []string {
+	var chainIdsToRemove []string
+	k.IterateInitTimeoutTimestamp(ctx, func(chainID string, ts uint64) bool {
+		if referenceTime > ts {
+			// initTimeout expired
+			chainIdsToRemove = append(chainIdsToRemove, chainID)
+			// continue to iterate through all timed out consumers
+			return true
+		}
+		// break iteration since the timeout timestamps are in order
+		return false
+	})
+
+	return chainIdsToRemove
+}
+
 // EndBlockCIS contains the EndBlock logic needed for
 // the Consumer Chain Removal sub-protocol
 func (k Keeper) EndBlockCCR(ctx sdk.Context) {
@@ -324,6 +340,7 @@ func (k Keeper) EndBlockCCR(ctx sdk.Context) {
 		// break iteration since the timeout timestamps are in order
 		return false
 	})
+
 	// remove consumers that timed out
 	for _, chainID := range chainIdsToRemove {
 		// stop the consumer chain and unlock the unbonding.

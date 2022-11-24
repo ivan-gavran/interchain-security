@@ -298,6 +298,51 @@ func TestMaturedUnbondingOps(t *testing.T) {
 	}
 }
 
+func TestChainIdsToRemove(t *testing.T) {
+	providerKeeper, ctx, ctrl, _ := testkeeper.GetProviderKeeperAndCtx(t, testkeeper.NewInMemKeeperParams(t))
+	defer ctrl.Finish()
+
+	// in the first scenario, chains D and E are expired (their expected time is smaller than the reference time)
+	// This indeed happens as expected because the chainID of the chain which is not expired is alphabetically
+	// after "D" and "E"
+	tc_active_first_alphabetically := []struct {
+		chainID  string
+		expected uint64
+	}{
+		{expected: 1, chainID: "D"},
+		{expected: 1, chainID: "E"},
+		{expected: 5, chainID: "F"},
+	}
+	referenceTime := 2
+
+	for _, test := range tc_active_first_alphabetically {
+		providerKeeper.SetInitTimeoutTimestamp(ctx, test.chainID, test.expected)
+	}
+	to_remove := providerKeeper.GetChainIdsToRemove(ctx, uint64(referenceTime))
+
+	require.Equal(t, []string{"D", "E"}, to_remove)
+
+	// in the second scenario, we add another chain with id "A" (so, alphabetically before all existing chains)
+	// and we increase the reference time so that "A" is only chain that should not expired.
+	// However, none of them expires (because the function breaks prematurely as soon as the first non-expired
+	// chain is found)
+	tc_active_last_alphabetically := []struct {
+		chainID  string
+		expected uint64
+	}{
+		{expected: 10, chainID: "A"},
+	}
+
+	for _, test := range tc_active_last_alphabetically {
+		providerKeeper.SetInitTimeoutTimestamp(ctx, test.chainID, test.expected)
+	}
+	referenceTime = 6
+	to_remove = providerKeeper.GetChainIdsToRemove(ctx, uint64(referenceTime))
+
+	require.Equal(t, []string{"D", "E", "F"}, to_remove)
+
+}
+
 func TestInitTimeoutTimestamp(t *testing.T) {
 	providerKeeper, ctx, ctrl, _ := testkeeper.GetProviderKeeperAndCtx(t, testkeeper.NewInMemKeeperParams(t))
 	defer ctrl.Finish()
